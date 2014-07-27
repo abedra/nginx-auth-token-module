@@ -26,8 +26,7 @@ lookup_user(auth_token_main_conf_t *conf, ngx_str_t *auth_token, ngx_str_t *user
   if (reply->type == REDIS_REPLY_NIL) {
     return NGX_DECLINED;
   } else {
-    user_id->data = (u_char*)reply->str;
-    user_id->len = strlen(reply->str);
+    ngx_str_set(user_id, reply->str);
     return NGX_OK;
   }
 }
@@ -37,12 +36,10 @@ static ngx_int_t
 redirect(ngx_http_request_t *r, ngx_str_t *location)
 {
   ngx_table_elt_t *h;
-  ngx_str_t label = ngx_string("Location");
-  ngx_str_t val = *location;
   h = ngx_list_push(&r->headers_out.headers);
   h->hash = 1;
-  h->key = label;
-  h->value = val;
+  ngx_str_set(&h->key, "Location");
+  h->value = *location;
 
   return NGX_HTTP_MOVED_TEMPORARILY;
 }
@@ -52,12 +49,10 @@ static void
 append_user_id(ngx_http_request_t *r, ngx_str_t *user_id)
 {
   ngx_table_elt_t *h;
-  ngx_str_t label = ngx_string("X-User-Id");
-  ngx_str_t val = *user_id;
   h = ngx_list_push(&r->headers_in.headers);
   h->hash = 1;
-  h->key = label;
-  h->value = val;
+  ngx_str_set(&h->key, "X-User-Id");
+  h->value = *user_id;
 }
 
 
