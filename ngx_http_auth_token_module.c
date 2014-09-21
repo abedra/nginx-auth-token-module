@@ -14,6 +14,9 @@ typedef struct {
   ngx_str_t redirect_location;
 } auth_token_main_conf_t;
 
+typedef struct {
+  ngx_flag_t enabled;
+} auth_token_loc_conf_t;
 
 ngx_module_t ngx_http_auth_token_module;
 
@@ -63,7 +66,11 @@ ngx_http_auth_token_handler(ngx_http_request_t *r)
     return NGX_DECLINED;
   }
 
-  r->main->internal = 1;
+  auth_token_loc_conf_t *loc = ngx_http_get_module_loc_conf(r, ngx_http_auth_token_module);
+
+  if (!loc->enabled || loc->enabled == NGX_CONF_UNSET) {
+    return NGX_DECLINED;
+  }
 
   auth_token_main_conf_t *conf = ngx_http_get_module_main_conf(r, ngx_http_auth_token_module);
 
@@ -121,6 +128,31 @@ ngx_http_auth_token_create_main_conf(ngx_conf_t *cf)
   return conf;
 }
 
+static void*
+ngx_http_auth_token_create_loc_conf(ngx_conf_t *cf)
+{
+  auth_token_loc_conf_t *conf;
+
+  conf = ngx_pcalloc(cf->pool, sizeof(auth_token_loc_conf_t));
+  if (conf == NULL) {
+    return NULL;
+  }
+
+  conf->enabled = NGX_CONF_UNSET;
+
+  return conf;
+}
+
+static char*
+ngx_http_auth_token_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
+{
+  auth_token_loc_conf_t *prev = (auth_token_loc_conf_t*)parent;
+  auth_token_loc_conf_t *conf = (auth_token_loc_conf_t*)child;
+
+  ngx_conf_merge_value(conf->enabled, prev->enabled, 0);
+
+  return NGX_CONF_OK;
+}
 
 static ngx_command_t ngx_http_auth_token_commands[] = {
   {
@@ -155,6 +187,14 @@ static ngx_command_t ngx_http_auth_token_commands[] = {
     offsetof(auth_token_main_conf_t, redirect_location),
     NULL
   },
+  {
+    ngx_string("auth_token_enabled"),
+    NGX_HTTP_MAIN_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+    ngx_conf_set_flag_slot,
+    NGX_HTTP_LOC_CONF_OFFSET,
+    offsetof(auth_token_loc_conf_t, enabled),
+    NULL
+  },
 
   ngx_null_command
 };
@@ -167,8 +207,8 @@ static ngx_http_module_t ngx_http_auth_token_module_ctx = {
   NULL,                                 /* init main configuration */
   NULL,                                 /* create server configuration */
   NULL,                                 /* merge server configuration */
-  NULL,                                 /* create location configuration */
-  NULL                                  /* merge location configuration */
+  ngx_http_auth_token_create_loc_conf,  /* create location configuration */
+  ngx_http_auth_token_merge_loc_conf    /* merge location configuration */
 };
 
 
