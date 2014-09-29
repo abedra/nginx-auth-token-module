@@ -90,11 +90,11 @@ ngx_http_auth_token_handler(ngx_http_request_t *r)
 
   ngx_table_elt_t            *header;
   ngx_http_header_t          *hashedheader;
-  
+
   header = NULL;
 
   hashedheader = search_hashed_headers_in(r, conf->token_name.data, conf->token_name.len);
- 
+
   if (hashedheader != NULL) {
     if (hashedheader->offset){
       header = *((ngx_table_elt_t **) ((char *) &r->headers_in + hashedheader->offset));
@@ -109,15 +109,13 @@ ngx_http_auth_token_handler(ngx_http_request_t *r)
       }
     }
   }
-  
-  /* Header is still null if we haven't found in hash so need to brute force */ 
+
+  /* Header is still null if we haven't found in hash so need to brute force */
   if (header == NULL){
     header = search_headers_in(r, conf->token_name.data, conf->token_name.len);
     if (header == NULL) {
 
-
       /* If header is still null then its not in headers so check cookies */
-
       ngx_int_t cookie_location;
       ngx_str_t auth_token;
       cookie_location = ngx_http_parse_multi_header_lines(&r->headers_in.cookies, &conf->token_name, &auth_token);
@@ -155,39 +153,39 @@ ngx_http_auth_token_handler(ngx_http_request_t *r)
 static ngx_table_elt_t *
 search_headers_in(ngx_http_request_t *r, u_char *name, size_t len)
 {
-	ngx_list_part_t            *part;
-	ngx_table_elt_t            *h;
-	ngx_uint_t                  i;
-	
-        part = &r->headers_in.headers.part;
-	h = part->elts;
-   
-	// headers array may consist of more than one part
-	// so loop throgh all of it
-	for (i = 0; /* void */ ; i++)
-	{
-		if (i >= part->nelts)
-		{
-			if (part->next == NULL)
-			{
-				break;
-			}
-			
-			part = part->next;
-			h = part->elts;
-			i = 0;
-		}
-		
-		// just compare names case insensitively
-		if (len != h[i].key.len || ngx_strcasecmp(name, h[i].key.data) != 0)
-		{
-			continue;
-		}
-		// ta-da, we got one
-		return &h[i];
-	}
-	// no plain header was found
-	return NULL;
+  ngx_list_part_t            *part;
+  ngx_table_elt_t            *h;
+  ngx_uint_t                  i;
+
+  part = &r->headers_in.headers.part;
+  h = part->elts;
+
+  // headers array may consist of more than one part
+  // so loop throgh all of it
+  for (i = 0; /* void */ ; i++)
+  {
+    if (i >= part->nelts)
+    {
+      if (part->next == NULL)
+      {
+        break;
+      }
+
+      part = part->next;
+      h = part->elts;
+      i = 0;
+    }
+
+    // just compare names case insensitively
+    if (len != h[i].key.len || ngx_strcasecmp(name, h[i].key.data) != 0)
+    {
+      continue;
+    }
+    // ta-da, we got one
+      return &h[i];
+  }
+  // no plain header was found
+  return NULL;
 }
 
 ngx_table_elt_t *
@@ -196,7 +194,7 @@ search_hashed_headers_in(ngx_http_request_t *r, u_char *name, size_t len) {
     ngx_http_header_t          *hh;
     u_char                     *lowcase_key;
     ngx_uint_t                  i, hash;
- 
+
     /*
     Header names are case-insensitive, so have been hashed by lowercases key
     */
@@ -204,7 +202,7 @@ search_hashed_headers_in(ngx_http_request_t *r, u_char *name, size_t len) {
     if (lowcase_key == NULL) {
         return NULL;
     }
- 
+
     /*
     Calculate a hash of lowercased header name
     */
@@ -213,7 +211,7 @@ search_hashed_headers_in(ngx_http_request_t *r, u_char *name, size_t len) {
         lowcase_key[i] = ngx_tolower(name[i]);
         hash = ngx_hash(hash, lowcase_key[i]);
     }
- 
+
     /*
     The layout of hashed headers is stored in ngx_http_core_module main config.
     All the hashes, its offsets and handlers are pre-calculated
@@ -221,31 +219,31 @@ search_hashed_headers_in(ngx_http_request_t *r, u_char *name, size_t len) {
     with data from ngx_http_headers_in at ngx_http_request.c:80.
     */
     cmcf = ngx_http_get_module_main_conf(r, ngx_http_core_module);
- 
+
     /*
     Find the current header description (ngx_http_header_t) by its hash
     */
     hh = ngx_hash_find(&cmcf->headers_in_hash, hash, lowcase_key, len);
- 
+
     if (hh == NULL) {
         /*
         There header is unknown or is not hashed yet.
         */
         return NULL;
     }
- 
+
     if (hh->offset == 0) {
         /*
         There header is hashed but not cached yet for some reason.
         */
         return NULL;
     }
- 
+
     /*
     The header value was already cached in some field
     of the r->headers_in struct (hh->offset tells in which one).
     */
- 
+
     return *((ngx_table_elt_t **) ((char *) &r->headers_in + hh->offset));
 }
 
