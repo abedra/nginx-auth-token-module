@@ -29,6 +29,7 @@ static ngx_table_elt_t *
 search_hashed_headers_in(ngx_http_request_t *r, u_char *name, size_t len);
 
 
+
 static ngx_int_t
 lookup_user(auth_token_main_conf_t *conf, ngx_str_t *auth_token, ngx_str_t *user_id)
 {
@@ -38,8 +39,7 @@ lookup_user(auth_token_main_conf_t *conf, ngx_str_t *auth_token, ngx_str_t *user
   if (reply->type == REDIS_REPLY_NIL) {
     return NGX_DECLINED;
   } else {
-    ngx_str_set(user_id, reply->str);
-
+    ngx_str_set(user_id, reply->str);  
     return NGX_OK;
   }
 }
@@ -65,7 +65,8 @@ append_user_id(ngx_http_request_t *r, ngx_str_t *user_id)
   h = ngx_list_push(&r->headers_in.headers);
   h->hash = 1;
   ngx_str_set(&h->key, "X-User-Id");
-  h->value = *user_id;
+  h->value = *user_id; 
+  h->value.len = strlen((*user_id).data);
 }
 
 
@@ -82,11 +83,13 @@ ngx_http_auth_token_handler(ngx_http_request_t *r)
     return NGX_DECLINED;
   }
 
+  r->main->internal = 1;
+
   auth_token_main_conf_t *conf = ngx_http_get_module_main_conf(r, ngx_http_auth_token_module);
 
 
   /* Now we search within the headers and look for the given header name */
-  ngx_str_t user_id;
+  ngx_str_t user_id;  
 
   ngx_table_elt_t            *header;
   ngx_http_header_t          *hashedheader;
@@ -98,7 +101,7 @@ ngx_http_auth_token_handler(ngx_http_request_t *r)
   if (hashedheader != NULL) {
     if (hashedheader->offset){
       header = *((ngx_table_elt_t **) ((char *) &r->headers_in + hashedheader->offset));
-
+      
       ngx_int_t lookup_result = lookup_user(conf, &header->value, &user_id);
 
       if (lookup_result == NGX_DECLINED) {
@@ -123,7 +126,6 @@ ngx_http_auth_token_handler(ngx_http_request_t *r)
       if (cookie_location == NGX_DECLINED) {
         return redirect(r, &conf->redirect_location);
       } else {
-        ngx_str_t user_id;
         ngx_int_t lookup_result = lookup_user(conf, &auth_token, &user_id);
 
         if (lookup_result == NGX_DECLINED) {
@@ -134,11 +136,15 @@ ngx_http_auth_token_handler(ngx_http_request_t *r)
         }
       }
     } else {
+      
       ngx_int_t lookup_result = lookup_user(conf, &header->value, &user_id);
 
       if (lookup_result == NGX_DECLINED) {
         return redirect(r, &conf->redirect_location);
       } else {
+
+ /*       ngx_log_error(NGX_LOG_ERR, r->connection->log,0, user_id3.data);  */
+
         append_user_id(r, &user_id);
         return NGX_DECLINED;
       }
