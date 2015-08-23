@@ -29,7 +29,8 @@ lookup_user(auth_token_main_conf_t *conf, ngx_str_t *auth_token, ngx_str_t *user
   if (reply->type == REDIS_REPLY_NIL) {
     return NGX_DECLINED;
   } else {
-    ngx_str_set(user_id, reply->str);
+    user_id->len = strlen(reply->str);
+    user_id->data = (u_char *) reply->str;
     return NGX_OK;
   }
 }

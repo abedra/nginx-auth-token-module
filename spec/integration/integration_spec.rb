@@ -37,5 +37,15 @@ describe "Integration Specs" do
 
       expect(http.response_code).to eq(200)
     end
+
+    it "handles user ids longer than 7 characters" do
+      @redis.set("f0f70003-f368-4266-a448-c45a96b8fc13", "user-longer-than-seven-characters")
+
+      http = Curl.get("http://127.0.0.1:8888") do |http|
+        http.headers['Cookie'] = "auth_token=f0f70003-f368-4266-a448-c45a96b8fc13"
+      end
+
+      expect(http.response_code).to eq(200)
+    end
   end
 end
