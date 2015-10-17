@@ -16,6 +16,7 @@ describe "Integration Specs" do
       end
 
       expect(http.response_code).to eq(302)
+      expect(http.redirect_url).to eq("http://google.com")
     end
 
     it "Redirects when the auth token is invalid" do
@@ -46,6 +47,18 @@ describe "Integration Specs" do
       end
 
       expect(http.response_code).to eq(200)
+    end
+
+    it "respects the location section redirect directive" do
+      http = Curl.get("http://127.0.0.1:8888/location")
+      expect(http.response_code).to eq(302)
+      expect(http.redirect_url).to eq("http://google.com/location")
+    end
+
+    it "respects the server section redirect directive" do
+      http = Curl.get("http://127.0.0.1:8889/")
+      expect(http.response_code).to eq(302)
+      expect(http.redirect_url).to eq("http://google.com/server")
     end
   end
 end

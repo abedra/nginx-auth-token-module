@@ -11,12 +11,14 @@ typedef struct {
   ngx_str_t redis_host;
   ngx_int_t redis_port;
   ngx_str_t cookie_name;
-  ngx_str_t redirect_location;
 } auth_token_main_conf_t;
+
 
 typedef struct {
   ngx_flag_t enabled;
+  ngx_str_t redirect_location;
 } auth_token_loc_conf_t;
+
 
 ngx_module_t ngx_http_auth_token_module;
 
@@ -80,13 +82,13 @@ ngx_http_auth_token_handler(ngx_http_request_t *r)
   cookie_location = ngx_http_parse_multi_header_lines(&r->headers_in.cookies, &conf->cookie_name, &auth_token);
 
   if (cookie_location == NGX_DECLINED) {
-    return redirect(r, &conf->redirect_location);
+    return redirect(r, &loc->redirect_location);
   } else {
     ngx_str_t user_id;
     ngx_int_t lookup_result = lookup_user(conf, &auth_token, &user_id);
 
     if (lookup_result == NGX_DECLINED) {
-      return redirect(r, &conf->redirect_location);
+      return redirect(r, &loc->redirect_location);
     } else {
       append_user_id(r, &user_id);
       return NGX_DECLINED;
@@ -151,6 +153,7 @@ ngx_http_auth_token_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
   auth_token_loc_conf_t *conf = (auth_token_loc_conf_t*)child;
 
   ngx_conf_merge_value(conf->enabled, prev->enabled, 0);
+  ngx_conf_merge_str_value(conf->redirect_location, prev->redirect_location, "");
 
   return NGX_CONF_OK;
 }
@@ -182,10 +185,10 @@ static ngx_command_t ngx_http_auth_token_commands[] = {
   },
   {
     ngx_string("auth_token_redirect_location"),
-    NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
+    NGX_HTTP_MAIN_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_SRV_CONF|NGX_CONF_TAKE1,
     ngx_conf_set_str_slot,
-    NGX_HTTP_MAIN_CONF_OFFSET,
-    offsetof(auth_token_main_conf_t, redirect_location),
+    NGX_HTTP_LOC_CONF_OFFSET,
+    offsetof(auth_token_loc_conf_t, redirect_location),
     NULL
   },
   {
