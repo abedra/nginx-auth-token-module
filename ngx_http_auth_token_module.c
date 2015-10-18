@@ -10,13 +10,14 @@
 typedef struct {
   ngx_str_t redis_host;
   ngx_int_t redis_port;
-  ngx_str_t cookie_name;
 } auth_token_main_conf_t;
 
 
 typedef struct {
   ngx_flag_t enabled;
   ngx_str_t redirect_location;
+  ngx_str_t cookie_name;
+  ngx_str_t header_name;
 } auth_token_loc_conf_t;
 
 
@@ -63,36 +64,100 @@ append_user_id(ngx_http_request_t *r, ngx_str_t *user_id)
 
 
 static ngx_int_t
+search_headers(ngx_http_request_t *r, auth_token_loc_conf_t *location_conf, ngx_str_t *token)
+{
+  ngx_list_part_t *part;
+  ngx_table_elt_t *h;
+  ngx_uint_t i;
+
+  part = &r->headers_in.headers.part;
+  h = part->elts;
+
+  for (i = 0; /**/; i++) {
+    if (i >= part->nelts) {
+      if (part->next == NULL) {
+        break;
+      }
+
+      part = part->next;
+      h = part->elts;
+      i = 0;
+    }
+
+    if (ngx_strncmp(h[i].key.data, location_conf->header_name.data, h[i].key.len) == 0) {
+      token->data = h[i].value.data;
+      token->len  = h[i].value.len;
+      return NGX_OK;
+    }
+  }
+
+  return NGX_DECLINED;
+}
+
+
+static ngx_int_t
+header_lookup(ngx_http_request_t *r, auth_token_loc_conf_t *location_conf, ngx_str_t *token)
+{
+  ngx_int_t result = search_headers(r, location_conf, token);
+  if (result == NGX_DECLINED) {
+    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "Could not locate header %V", &location_conf->header_name);
+    return NGX_DECLINED;
+  } else {
+    return NGX_OK;
+  }
+}
+
+
+static ngx_int_t
+cookie_lookup(ngx_http_request_t *r, auth_token_loc_conf_t *location_conf, ngx_str_t *token)
+{
+  ngx_int_t cookie_location;
+  cookie_location = ngx_http_parse_multi_header_lines(&r->headers_in.cookies, &location_conf->cookie_name, token);
+  if (cookie_location == NGX_DECLINED) {
+    return NGX_DECLINED;
+  } else {
+    return NGX_OK;
+  }
+}
+
+
+static ngx_int_t
 ngx_http_auth_token_handler(ngx_http_request_t *r)
 {
   if (r->main->internal) {
     return NGX_DECLINED;
   }
 
-  auth_token_loc_conf_t *loc = ngx_http_get_module_loc_conf(r, ngx_http_auth_token_module);
+  auth_token_loc_conf_t *location_conf = ngx_http_get_module_loc_conf(r, ngx_http_auth_token_module);
 
-  if (!loc->enabled || loc->enabled == NGX_CONF_UNSET) {
+  if (!location_conf->enabled || location_conf->enabled == NGX_CONF_UNSET) {
     return NGX_DECLINED;
   }
 
-  auth_token_main_conf_t *conf = ngx_http_get_module_main_conf(r, ngx_http_auth_token_module);
+  auth_token_main_conf_t *main_conf = ngx_http_get_module_main_conf(r, ngx_http_auth_token_module);
 
-  ngx_int_t cookie_location;
   ngx_str_t auth_token;
-  cookie_location = ngx_http_parse_multi_header_lines(&r->headers_in.cookies, &conf->cookie_name, &auth_token);
-
-  if (cookie_location == NGX_DECLINED) {
-    return redirect(r, &loc->redirect_location);
+  ngx_int_t search_result;
+  if (location_conf->header_name.len != 0) {
+    search_result = header_lookup(r, location_conf, &auth_token);
   } else {
-    ngx_str_t user_id;
-    ngx_int_t lookup_result = lookup_user(conf, &auth_token, &user_id);
+    search_result = cookie_lookup(r, location_conf, &auth_token);
+  }
 
-    if (lookup_result == NGX_DECLINED) {
-      return redirect(r, &loc->redirect_location);
-    } else {
-      append_user_id(r, &user_id);
-      return NGX_DECLINED;
-    }
+  if (search_result == NGX_DECLINED) {
+    return redirect(r, &location_conf->redirect_location);
+  }
+
+  ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "Looking up user by auth token %V", &auth_token);
+
+  ngx_str_t user_id;
+  ngx_int_t lookup_result = lookup_user(main_conf, &auth_token, &user_id);
+
+  if (lookup_result == NGX_DECLINED) {
+    return redirect(r, &location_conf->redirect_location);
+  } else {
+    append_user_id(r, &user_id);
+    return NGX_DECLINED;
   }
 }
 
@@ -154,6 +219,8 @@ ngx_http_auth_token_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 
   ngx_conf_merge_value(conf->enabled, prev->enabled, 0);
   ngx_conf_merge_str_value(conf->redirect_location, prev->redirect_location, "");
+  ngx_conf_merge_str_value(conf->cookie_name, prev->cookie_name, "");
+  ngx_conf_merge_str_value(conf->header_name, prev->header_name, "");
 
   return NGX_CONF_OK;
 }
@@ -177,10 +244,18 @@ static ngx_command_t ngx_http_auth_token_commands[] = {
   },
   {
     ngx_string("auth_token_cookie_name"),
-    NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
+    NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
     ngx_conf_set_str_slot,
-    NGX_HTTP_MAIN_CONF_OFFSET,
-    offsetof(auth_token_main_conf_t, cookie_name),
+    NGX_HTTP_LOC_CONF_OFFSET,
+    offsetof(auth_token_loc_conf_t, cookie_name),
+    NULL
+  },
+  {
+    ngx_string("auth_token_header_name"),
+    NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+    ngx_conf_set_str_slot,
+    NGX_HTTP_LOC_CONF_OFFSET,
+    offsetof(auth_token_loc_conf_t, header_name),
     NULL
   },
   {

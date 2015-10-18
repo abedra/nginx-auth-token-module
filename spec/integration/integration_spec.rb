@@ -60,5 +60,15 @@ describe "Integration Specs" do
       expect(http.response_code).to eq(302)
       expect(http.redirect_url).to eq("http://google.com/server")
     end
+
+    it "properly locates the authentication token in a header" do
+      @redis.set("test", "sucess")
+
+      http = Curl.get("http://127.0.0.1:8889") do |http|
+        http.headers['X-Authorization'] = "test"
+      end
+
+      expect(http.response_code).to eq(200)
+    end
   end
 end
