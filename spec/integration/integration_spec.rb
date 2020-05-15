@@ -16,7 +16,7 @@ describe "Integration Specs" do
       end
 
       expect(http.response_code).to eq(302)
-      expect(http.redirect_url).to eq("http://google.com")
+      expect(http.redirect_url).to eq("http://google.com/")
     end
 
     it "Redirects when the auth token is invalid" do
